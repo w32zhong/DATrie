@@ -33,7 +33,7 @@ int cmap(char c)
 
 int *children(int state)
 {
-	int *child = malloc(sizeof(int) * (M + 1/* '\0' */));
+	int *child = malloc(sizeof(int) * (M + 1 /*'\0'*/));
 	int i, j = 0;
 	for (i = base[state]; i < MIN(N, base[state] + M); i++) {
 		if (check[i] == state)
