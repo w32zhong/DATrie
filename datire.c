@@ -45,13 +45,13 @@ int *children(int state)
 	return child;
 }
 
-int allocate(int state, int *child, int conflict_state)
+int base_alloc(int *child, int conflict_state)
 {
-	int j, new_base = base[state];
+	int j, q = 0;
 	do {
-		new_base ++;
+		q ++;
 		for (j = 0; child[j] != 0; j++) {
-			int new_state = new_base + child[j] - base[state];
+			int new_state = q + child[j];
 			if (new_state == conflict_state ||
 			    base[new_state] != 0)
 				break;
@@ -60,8 +60,7 @@ int allocate(int state, int *child, int conflict_state)
 			break;
 	} while (1);
 
-	printf("Relocating state %d to new base %d \n", state, new_base);
-	return new_base;
+	return q;
 }
 
 int relocate(int state, int *child, int new_base)
@@ -93,8 +92,9 @@ int relocate(int state, int *child, int new_base)
 
 void resolve(int state, int conflict_state)
 {
-	int *child = children(state);
-	int new_base = allocate(state, child, conflict_state);
+	int new_base, *child = children(state);
+	new_base = base[state] + base_alloc(child, conflict_state);
+	printf("Relocating state %d to new base %d \n", state, new_base);
 	relocate(state, child, new_base);
 	free(child);
 }
