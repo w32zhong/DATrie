@@ -74,7 +74,7 @@ int relocate(int state, int *child, int new_base)
 	for (j = 0; child[j] != 0; j++) {
 		int new_state = new_base + child[j] - base[state];
 
-		printf("copy child [%d] to new state -->  %d \n", child[j], new_state);
+		printf("copy child[%d] to new state -->  %d \n", child[j], new_state);
 		base[new_state] = base[child[j]]; // copy child base value
 		check[new_state] = state;  // set new child parent
 		base[child[j]] = 0; // clean old child base value
@@ -115,7 +115,7 @@ int insert_char(int cur_state, int next_state)
 		printf("Insert [%d] \n", next_state);
 
 	} else if (check[next_state] != cur_state) {
-		printf("check[%d] != %d \n", next_state, cur_state);
+		printf("check[%d] != %d, Conflict! \n", next_state, cur_state);
 		resolve(check[next_state], next_state);
 		return 1;
 	} else {
@@ -143,8 +143,9 @@ restart:
 		}
 
 		if (insert_char(cur_state, next_state) != 0) {
-			/* conflict resolved, but we need to restart
-			 * in case cur_state is changed */
+			/* there is conflict, although resolved,
+			 * we have to restart from string head
+			 * in case any ancestor state is changed. */
 			cur_state = 1;
 			str_idx = 0;
 			goto restart;
