@@ -35,11 +35,17 @@ int *children(int state)
 {
 	int *child = malloc(sizeof(int) * (M + 1 /*'\0'*/));
 	int i, j = 0;
-	for (i = state; i < N; i++) {
+	for (i = 1; i < N; i++) {
 		if (check[i] == state)
 			child[j++] = i;
 	}
 	child[j] = 0;
+
+	printf("children of [%d]: ", state);
+	for (int i = 0; child[i] != 0; i++) {
+		printf("[%d] ", child[i]);
+	}
+	printf("\n");
 
 	return child;
 }
@@ -68,7 +74,7 @@ int relocate(int state, int *child, int new_base)
 	for (j = 0; child[j] != 0; j++) {
 		int new_state = new_base + child[j] - base[state];
 
-		printf("copy [%d] to new state -->  %d \n", child[j], new_state);
+		printf("copy child [%d] to new state -->  %d \n", child[j], new_state);
 		base[new_state] = base[child[j]]; // copy child base value
 		check[new_state] = state;  // set new child parent
 		base[child[j]] = 0; // clean old child base value
@@ -95,14 +101,13 @@ void resolve(int state, int conflict_state)
 	int new_base, *child = children(state);
 	new_base = base[state] + base_alloc(child, conflict_state);
 	printf("Relocating state %d to new base %d \n", state, new_base);
+
 	relocate(state, child, new_base);
 	free(child);
 }
 
 int insert_char(int cur_state, int next_state)
 {
-	int relocated = 0;
-again:
 	if (base[next_state] == 0) {
 		base[next_state] = next_state; /* better hueristic value? TODO */
 		check[next_state] = cur_state;
@@ -110,15 +115,9 @@ again:
 		printf("Insert [%d] \n", next_state);
 
 	} else if (check[next_state] != cur_state) {
-		if (relocated) {
-			printf("Err: Still conflict after relocation. \n");
-			return 1;
-		}
-
 		printf("check[%d] != %d \n", next_state, cur_state);
 		resolve(check[next_state], next_state);
-		relocated = 1;
-		goto again;
+		return 1;
 	} else {
 		printf("Walk: [%d] \n", next_state);
 	}
@@ -131,6 +130,7 @@ int insert(char *str)
 	int next_state, cur_state = 1;
 	int c, str_idx = 0;
 
+restart:
 	while (str_idx < strlen(str)) {
 		c = cmap(str[str_idx]);
 		next_state = base[cur_state] + c;
@@ -143,8 +143,11 @@ int insert(char *str)
 		}
 
 		if (insert_char(cur_state, next_state) != 0) {
-			printf("Failed to insert %c \n", str[str_idx]);
-			return 2;
+			/* conflict resolved, but we need to restart
+			 * in case cur_state is changed */
+			cur_state = 1;
+			str_idx = 0;
+			goto restart;
 		}
 
 		cur_state = next_state;
@@ -163,10 +166,10 @@ int lookup(char *str)
 		c = cmap(str[str_idx]);
 		next_state = base[cur_state] + c;
 
+		printf("`%c' (+%d), next state = %d \n", str[str_idx], c, next_state);
+
 		if (base[next_state] == 0 || check[next_state] != cur_state)
 			return 0;
-
-		printf("%c !\n", str[str_idx]);
 
 		cur_state = next_state;
 		str_idx ++;
@@ -175,9 +178,22 @@ int lookup(char *str)
 	return 1;
 }
 
+char test_string[][64] = {
+	"bachelor",
+	"jar",
+	"air",
+	"badge",
+	"baby",
+	"bad",
+	"badly",
+	"boy",
+	"apple",
+	"app"
+};
+
 int main()
 {
-	int ret = 0;
+	int i, ret = 0;
 
 	/* array[0] does not matter since our root starts
 	 * from array[1]. We avoid array[0] because finding
@@ -187,22 +203,21 @@ int main()
 	check[0] = -4321;
 	base[1] = 1;
 
-	ret |= insert("bachelor");
-	ret |= insert("jar");
-	ret |= insert("air");
-	ret |= insert("badge");
-	ret |= insert("baby");
-	ret |= insert("bad");
-	//ret |= insert("badly");
-	//ret |= insert("boy");
-	//ret |= insert("apple");
-	//ret |= insert("app");
-	printf("Return code: %x \n", ret);
+	for (i = 0; i < sizeof(test_string) / 64; i++) {
+		printf("Inserting %s ...\n", test_string[i]);
+		ret |= insert(test_string[i]);
+		printf("\n");
+	}
+
+	printf("Insertions return code: %x \n\n", ret);
 
 	printf("=== Final Double Array === \n");
-	//print();
+	print();
+	printf("\n");
 
-	//ret = lookup("bachelor");
-	//printf("lookup return code: %d\n", ret);
+	for (i = 0; i < sizeof(test_string) / 64; i++) {
+		ret = lookup(test_string[i]);
+		printf("Look up return code for `%s': %d \n", test_string[i], ret);
+	}
 	return 0;
 }
