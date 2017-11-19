@@ -106,10 +106,10 @@ void resolve(int state, int conflict_state)
 	free(child);
 }
 
-int insert_char(int cur_state, int next_state)
+int insert_char(int cur_state, int next_state, int next_val)
 {
 	if (base[next_state] == 0) {
-		base[next_state] = next_state; /* better hueristic value? TODO */
+		base[next_state] = next_val;
 		check[next_state] = cur_state;
 
 		printf("Insert [%d] \n", next_state);
@@ -142,7 +142,7 @@ restart:
 			return 1;
 		}
 
-		if (insert_char(cur_state, next_state) != 0) {
+		if (insert_char(cur_state, next_state, next_state) != 0) {
 			/* there is conflict, although resolved,
 			 * we have to restart from string head
 			 * in case any ancestor state is changed. */
@@ -153,6 +153,14 @@ restart:
 
 		cur_state = next_state;
 		str_idx ++;
+	}
+
+	/* insert the associating value */
+	next_state = base[cur_state] + 0;
+	while (insert_char(cur_state, next_state, 91622) != 0) {
+			cur_state = 1;
+			str_idx = 0;
+			goto restart;
 	}
 
 	return 0;
@@ -175,6 +183,11 @@ int lookup(char *str)
 		cur_state = next_state;
 		str_idx ++;
 	}
+
+	/* get the associating value */
+	next_state  = base[cur_state] + 0;
+	int assoc_value = base[next_state];
+	printf("found value: %d @ %d\n", assoc_value, next_state);
 
 	return 1;
 }
@@ -220,5 +233,9 @@ int main()
 		ret = lookup(test_string[i]);
 		printf("Look up return code for `%s': %d \n", test_string[i], ret);
 	}
+
+	ret = lookup("date");
+	printf("Look up return code for `%s': %d \n", "date", ret);
+
 	return 0;
 }
