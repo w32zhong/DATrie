@@ -64,6 +64,48 @@ struct datrie datrie_new()
 	return dat;
 }
 
+static void datrie_realloc(struct datrie *dat, datrie_state_t new_len)
+{
+	datrie_state_t *tmp = NULL;
+
+	tmp = realloc(dat->base, sizeof(datrie_state_t) * new_len);
+	if (NULL == tmp) {
+		fprintf(stderr, "realloc base[] failed.\n");
+		free(dat->base);
+		abort();
+	} else {
+		/* success, tmp is pointing to reallocated memory and original
+		 * memory is deallocated. */
+		dat->base = tmp;
+	}
+
+	tmp = realloc(dat->check, sizeof(datrie_state_t) * new_len);
+	if (NULL == tmp) {
+		fprintf(stderr, "realloc check[] failed.\n");
+		free(dat->check);
+		abort();
+	} else {
+		/* success, tmp is pointing to reallocated memory and original
+		 * memory is deallocated. */
+		dat->check = tmp;
+	}
+
+	/* fill the newly allocated area with zeros */
+	datrie_state_t i, old_len = dat->len;
+	for (i = old_len; i < new_len; i++) {
+		dat->base[i] = 0;
+		dat->check[i] = 0;
+	}
+
+	/* update length */
+	dat->len = new_len;
+
+#ifdef DATRIE_DEBUG
+	printf("DATrie space re-allocating to new length %u ...\n", new_len);
+	// datrie_print(*dat, !0 /* print all rows */);
+#endif
+}
+
 void datrie_free(struct datrie dat)
 {
 	free(dat.base);
@@ -164,11 +206,15 @@ static datrie_state_t
 shift_alloc(struct datrie *dat, datrie_state_t *child,
            datrie_state_t conflict_state)
 {
-	datrie_state_t j, try_shift = 1;
+	datrie_state_t j, max_new_state = 0, try_shift = 1;
 	do {
 		try_shift ++;
 		for (j = 0; child[j] != 0; j++) {
 			datrie_state_t child_new_state = try_shift + child[j];
+
+			/* keep watching the maximum possible new state value */
+			if (child_new_state > max_new_state)
+				max_new_state = child_new_state
 
 			/* make sure this new state does not conflict with other
 			 * existing state AND it does not conflict the conflict_state
@@ -180,6 +226,10 @@ shift_alloc(struct datrie *dat, datrie_state_t *child,
 		if (child[j] == 0)
 			break; /* all children can accept this, we will be good. */
 	} while (1);
+
+	/* allocate memory if necessary */
+	if (max_new_state >= dat->len)
+		datrie_realloc(dat, max_new_state + 1); /* most lazy policy */
 
 	return try_shift;
 }
@@ -253,48 +303,6 @@ attach_new_state(struct datrie *dat, datrie_state_t cur,
 	} else {
 		return NEW_STATE_ALREADY_THERE;
 	}
-}
-
-static void datrie_realloc(struct datrie *dat, datrie_state_t new_len)
-{
-	datrie_state_t *tmp = NULL;
-
-	tmp = realloc(dat->base, sizeof(datrie_state_t) * new_len);
-	if (NULL == tmp) {
-		fprintf(stderr, "realloc base[] failed.\n");
-		free(dat->base);
-		abort();
-	} else {
-		/* success, tmp is pointing to reallocated memory and original
-		 * memory is deallocated. */
-		dat->base = tmp;
-	}
-
-	tmp = realloc(dat->check, sizeof(datrie_state_t) * new_len);
-	if (NULL == tmp) {
-		fprintf(stderr, "realloc check[] failed.\n");
-		free(dat->check);
-		abort();
-	} else {
-		/* success, tmp is pointing to reallocated memory and original
-		 * memory is deallocated. */
-		dat->check = tmp;
-	}
-
-	/* fill the newly allocated area with zeros */
-	datrie_state_t i, old_len = dat->len;
-	for (i = old_len; i < new_len; i++) {
-		dat->base[i] = 0;
-		dat->check[i] = 0;
-	}
-
-	/* update length */
-	dat->len = new_len;
-
-#ifdef DATRIE_DEBUG
-	printf("DATrie space re-allocating to new length %u ...\n", new_len);
-	// datrie_print(*dat, !0 /* print all rows */);
-#endif
 }
 
 static enum walk_cntl
