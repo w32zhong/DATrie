@@ -1,6 +1,5 @@
-## Readme
+## Double Array Trie
 
-I cannot find a simple enough DAT example in C, so I think it is better to invent the wheel again.
+A hello-world implementation for DATrie.
 
-This program is for demo purpose. As you may find it is very simple, but hopefully the simpleness can help some people to better understand Double Array Trie.
-
+I cannot find a simple enough DAT code in C, so in order to really understand it, I think it is better to reinvent the wheel.
