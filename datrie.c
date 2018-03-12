@@ -214,7 +214,7 @@ shift_alloc(struct datrie *dat, datrie_state_t *child,
 
 			/* keep watching the maximum possible new state value */
 			if (child_new_state > max_new_state)
-				max_new_state = child_new_state
+				max_new_state = child_new_state;
 
 			/* make sure this new state does not conflict with other
 			 * existing state AND it does not conflict the conflict_state
