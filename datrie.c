@@ -161,14 +161,14 @@ datrie_children(struct datrie *dat, datrie_state_t state)
 }
 
 static datrie_state_t
-base_alloc(struct datrie *dat, datrie_state_t *child,
+shift_alloc(struct datrie *dat, datrie_state_t *child,
            datrie_state_t conflict_state)
 {
-	datrie_state_t j, try_base = 1;
+	datrie_state_t j, try_shift = 1;
 	do {
-		try_base ++;
+		try_shift ++;
 		for (j = 0; child[j] != 0; j++) {
-			datrie_state_t child_new_state = try_base + child[j];
+			datrie_state_t child_new_state = try_shift + child[j];
 
 			/* make sure this new state does not conflict with other
 			 * existing state AND it does not conflict the conflict_state
@@ -181,7 +181,7 @@ base_alloc(struct datrie *dat, datrie_state_t *child,
 			break; /* all children can accept this, we will be good. */
 	} while (1);
 
-	return try_base;
+	return try_shift;
 }
 
 static void
@@ -190,7 +190,8 @@ relocate(struct datrie *dat, datrie_state_t state, datrie_state_t *child,
 {
 	datrie_state_t *grand_child, j, k;
 	for (j = 0; child[j] != 0; j++) {
-		datrie_state_t new_state = new_base + child[j] - dat->base[state];
+		/* value parenthesis is shift value, it must be greater than zero */
+		datrie_state_t new_state = (new_base - dat->base[state]) + child[j];
 #ifdef DATRIE_DEBUG
 		printf("Move child %u of %u to new state %u.\n",
 		       child[j], state, new_state);
@@ -224,7 +225,7 @@ relocate(struct datrie *dat, datrie_state_t state, datrie_state_t *child,
 static void resolve(struct datrie *dat, int state, int conflict_state)
 {
 	int new_base, *child = datrie_children(dat, state);
-	new_base = dat->base[state] + base_alloc(dat, child, conflict_state);
+	new_base = dat->base[state] + shift_alloc(dat, child, conflict_state);
 #ifdef DATRIE_DEBUG
 	printf("Conflict between one child of state %d and %d \n",
 	       state, conflict_state);
