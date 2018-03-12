@@ -4,7 +4,7 @@
 #include <string.h>
 
 #define DATRIE_MAX_STATE_TRANSFER UINT8_MAX
-#define DATRIE_DEBUG
+//#define DATRIE_DEBUG
 
 typedef uint32_t datrie_state_t;
 
@@ -19,13 +19,23 @@ enum walk_cntl {
 	WALK_CNTL_BREAK
 };
 
+enum new_state_add_res {
+	NEW_STATE_ALREADY_THERE,
+	NEW_STATE_CONFLICT,
+	NEW_STATE_ADDED
+};
+
 typedef enum walk_cntl
 (*walk_cb_t)(struct datrie*, datrie_state_t, datrie_state_t, void*);
 
 struct datrie datrie_new()
 {
 	struct datrie dat;
+#ifdef DATRIE_DEBUG
+	dat.len = 3;
+#else
 	dat.len = DATRIE_MAX_STATE_TRANSFER;
+#endif
 	dat.base = calloc(dat.len, sizeof(datrie_state_t));
 	dat.check = calloc(dat.len, sizeof(datrie_state_t));
 	dat.max_val = 0; /* indicates no value yet */
@@ -225,7 +235,7 @@ static void resolve(struct datrie *dat, int state, int conflict_state)
 	free(child);
 }
 
-static int
+static enum new_state_add_res
 attach_new_state(struct datrie *dat, datrie_state_t cur,
                  datrie_state_t new, datrie_state_t val)
 {
@@ -233,25 +243,41 @@ attach_new_state(struct datrie *dat, datrie_state_t cur,
 		/* space is available */
 		dat->base[new] = val;
 		dat->check[new] = cur;
+		return NEW_STATE_ADDED;
+
 	} else if (dat->check[new] != cur) {
 		resolve(dat, dat->check[new], new);
-		return 1;
-	} else {
-		; /* the new state is already added */
-	}
+		return NEW_STATE_CONFLICT;
 
-	return 0;
+	} else {
+		return NEW_STATE_ALREADY_THERE;
+	}
 }
 
 static void datrie_realloc(struct datrie *dat, datrie_state_t new_len)
 {
-	if (NULL == realloc(dat->base, new_len)) {
+	datrie_state_t *tmp = NULL;
+
+	tmp = realloc(dat->base, sizeof(datrie_state_t) * new_len);
+	if (NULL == tmp) {
 		fprintf(stderr, "realloc base[] failed.\n");
+		free(dat->base);
 		abort();
+	} else {
+		/* success, tmp is pointing to reallocated memory and original
+		 * memory is deallocated. */
+		dat->base = tmp;
 	}
-	if (NULL == realloc(dat->check, new_len)) {
+
+	tmp = realloc(dat->check, sizeof(datrie_state_t) * new_len);
+	if (NULL == tmp) {
 		fprintf(stderr, "realloc check[] failed.\n");
+		free(dat->check);
 		abort();
+	} else {
+		/* success, tmp is pointing to reallocated memory and original
+		 * memory is deallocated. */
+		dat->check = tmp;
 	}
 
 	/* fill the newly allocated area with zeros */
@@ -263,6 +289,11 @@ static void datrie_realloc(struct datrie *dat, datrie_state_t new_len)
 
 	/* update length */
 	dat->len = new_len;
+
+#ifdef DATRIE_DEBUG
+	printf("DATrie space re-allocating to new length %u ...\n", new_len);
+	// datrie_print(*dat, !0 /* print all rows */);
+#endif
 }
 
 static enum walk_cntl
@@ -277,13 +308,15 @@ insert_walk_cb(struct datrie *dat, datrie_state_t cur, datrie_state_t next,
 	if (next == dat->base[cur] + 0) /* tail node */
 		new_val = dat->max_val + 1;
 
-	if (0 != attach_new_state(dat, cur, next, new_val)) {
+	enum new_state_add_res res = attach_new_state(dat, cur, next, new_val);
+	if (NEW_STATE_CONFLICT == res) {
 		/* there is conflict, although resolved,
 		 * we have to restart from string head
 		 * in case any ancestor state is changed. */
 		return WALK_CNTL_REWALK;
-	} else if (next == dat->base[cur] + 0) {
-		/* tail node AND no conflict, just to ensure we only update once */
+	} else if (NEW_STATE_ADDED == res /* newly added */ &&
+	           next == dat->base[cur] + 0 /* tail node */) {
+		/* (just to ensure we only update max_val once) */
 		dat->max_val += 1;
 	}
 
@@ -313,8 +346,9 @@ lookup_walk_cb(struct datrie *dat, datrie_state_t cur, datrie_state_t next,
 	if (next >= dat->len)
 		return WALK_CNTL_BREAK; /* out of index */
 
-	if (next == dat->base[cur] + 0) /* tail node */
-		*found = dat->base[next]; /* found existing value stored in tail node */
+	if (next == dat->base[cur] + 0 /* tail node */ &&
+	    dat->check[next] == cur /* existing value */)
+		*found = dat->base[next]; /* found */
 
 	return WALK_CNTL_CONTINUE;
 }
@@ -332,7 +366,8 @@ datrie_state_t datrie_lookup(struct datrie *dat, const char *utf8_str)
 
 int main()
 {
-	struct datrie dict = datrie_new();
+	datrie_state_t ret, i;
+	struct datrie dict;
 	const char test_string[][64] = {
 		"bachelor",
 		"jar",
@@ -341,14 +376,18 @@ int main()
 		"baby",
 		"bad",
 		"badly",
+		"badly",   /* test repeating insert */
 		"boy",
 		"apple",
-		"app"
+		"app",
+		"toolong", /* lookup failure test case */
+		"ba"       /* lookup failure test case */
 	};
 
+	dict = datrie_new();
 	datrie_print(dict, 0);
 
-	for (datrie_state_t ret, i = 0; i < sizeof(test_string) / 64; i++) {
+	for (i = 0; i < sizeof(test_string) / 64 - 2; i++) {
 		ret = datrie_insert(&dict, test_string[i]);
 		printf("\n");
 		printf("inserting %s (return %u)\n", test_string[i], ret);
@@ -359,10 +398,14 @@ int main()
 		datrie_print(dict, 0);
 	}
 
-	for (datrie_state_t ret, i = 0; i < sizeof(test_string) / 64; i++) {
+	for (i = 0; i < sizeof(test_string) / 64; i++) {
 		ret = datrie_lookup(&dict, test_string[i]);
 		printf("\n");
 		printf("finding: %s (return %u)\n", test_string[i], ret);
+		for (int j = 0; j < strlen(test_string[i]); j++) {
+			printf("\t `%c' (+%u)\n", test_string[i][j],
+			                          datrie_cmap(test_string[i][j]));
+		}
 	}
 
 	datrie_free(dict);
