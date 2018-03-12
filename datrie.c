@@ -144,12 +144,16 @@ datrie_state_t datrie_cmap(const char c)
 	 * map to datrie_state_t based on frequency.
 	 */
 
-	if (c == '\0')
+	/* convert signed char to unsigned char, to avoid the
+	 * effect of "sign extension" */
+	uint8_t uc = (uint8_t)c;
+
+	if (uc == '\0')
 		/* at the end, we may want to return an zero value
 		 * to indicate this is the finishing walk step. */
 		return 0;
 	else
-		return (datrie_state_t)(c - 'a' + 1);
+		return (datrie_state_t)(uc - 'a' + 1);
 }
 
 static datrie_state_t
@@ -387,6 +391,8 @@ int main()
 		"badly",
 		"badly",   /* test repeating insert */
 		"boy",
+		"北京",        /* utf-8 non-alphabet */
+		"北京颐和园",  /* utf-8 non-alphabet */
 		"apple",
 		"app",
 		"toolong", /* lookup failure test case */
