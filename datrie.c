@@ -1,17 +1,11 @@
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "datrie.h"
+
 #define DATRIE_MAX_STATE_TRANSFER UINT8_MAX
 //#define DATRIE_DEBUG
-
-typedef uint32_t datrie_state_t;
-
-struct datrie {
-	datrie_state_t *base, *check;
-	datrie_state_t len, max_val;
-};
 
 enum walk_cntl {
 	WALK_CNTL_REWALK,
@@ -120,7 +114,7 @@ void datrie_print(struct datrie dat, int print_all)
 	printf("%6s", "check");
 	printf("\n");
 
-	for (int i = 0; i < dat.len; i++) {
+	for (datrie_state_t i = 0; i < dat.len; i++) {
 		/*
 		 * we should not rely on check[i] to decide
 		 * if it is dirty, otherwise we will not see
@@ -159,8 +153,8 @@ datrie_state_t datrie_cmap(const char c)
 static datrie_state_t
 datrie_walk(struct datrie *dat, const char *utf8_str, walk_cb_t cb, void *arg)
 {
-	int next_state, cur_state = 1;
-	int c /* state transfer */, str_idx = 0;
+	datrie_state_t next_state, cur_state = 1;
+	datrie_state_t c /* state transfer */, str_idx = 0;
 
 	if (strlen(utf8_str) == 0)
 		return 0;
@@ -220,6 +214,10 @@ shift_alloc(struct datrie *dat, datrie_state_t *child,
 			if (child_new_state > max_new_state)
 				max_new_state = child_new_state;
 
+			/* for children shifted out of boundary, it is not conflict. */
+			if (child_new_state >= dat->len)
+				continue;
+
 			/* make sure this new state does not conflict with other
 			 * existing state AND it does not conflict the conflict_state
 			 * which is inserting now. */
@@ -276,9 +274,11 @@ relocate(struct datrie *dat, datrie_state_t state, datrie_state_t *child,
 	dat->base[state] = new_base;
 }
 
-static void resolve(struct datrie *dat, int state, int conflict_state)
+static void
+resolve(struct datrie *dat,
+        datrie_state_t state, datrie_state_t conflict_state)
 {
-	int new_base, *child = datrie_children(dat, state);
+	datrie_state_t new_base, *child = datrie_children(dat, state);
 	new_base = dat->base[state] + shift_alloc(dat, child, conflict_state);
 #ifdef DATRIE_DEBUG
 	printf("Conflict between one child of state %d and %d \n",
@@ -375,54 +375,4 @@ datrie_state_t datrie_lookup(struct datrie *dat, const char *utf8_str)
 		/* out of index */
 		return 0;
 	}
-}
-
-int main()
-{
-	datrie_state_t ret, i;
-	struct datrie dict;
-	const char test_string[][64] = {
-		"bachelor",
-		"jar",
-		"air",
-		"badge",
-		"baby",
-		"bad",
-		"badly",
-		"badly",   /* test repeating insert */
-		"boy",
-		"北京",        /* utf-8 non-alphabet */
-		"北京颐和园",  /* utf-8 non-alphabet */
-		"apple",
-		"app",
-		"toolong", /* lookup failure test case */
-		"ba"       /* lookup failure test case */
-	};
-
-	dict = datrie_new();
-	datrie_print(dict, 0);
-
-	for (i = 0; i < sizeof(test_string) / 64 - 2; i++) {
-		ret = datrie_insert(&dict, test_string[i]);
-		printf("\n");
-		printf("inserting %s (return %u)\n", test_string[i], ret);
-		for (int j = 0; j < strlen(test_string[i]); j++) {
-			printf("\t `%c' (+%u)\n", test_string[i][j],
-			                          datrie_cmap(test_string[i][j]));
-		}
-		datrie_print(dict, 0);
-	}
-
-	for (i = 0; i < sizeof(test_string) / 64; i++) {
-		ret = datrie_lookup(&dict, test_string[i]);
-		printf("\n");
-		printf("finding: %s (return %u)\n", test_string[i], ret);
-		for (int j = 0; j < strlen(test_string[i]); j++) {
-			printf("\t `%c' (+%u)\n", test_string[i][j],
-			                          datrie_cmap(test_string[i][j]));
-		}
-	}
-
-	datrie_free(dict);
-	return 0;
 }
